@@ -42,7 +42,7 @@ namespace prioritized_inverse_kinematics_solver2 {
 
     double dt = 0.1;
     bool calcVelocity = true; // dtを用いて速度の計算をするかどうか. 速度を利用するconstraintがあるなら必須. ないなら、falseにすると高速化が見込まれる
-    bool checkFinalState = true; // maxIteration番目またはconvergedのloop後に、各constraintを満たしているかどうかの判定を行うかどうか. 行わない場合、falseが返る.
+    bool checkFinalState = true; // maxIteration番目またはconvergedのloop後に、各constraintを満たしているかどうかの判定を行うかどうか. falseの場合、最終状態のconstraint再評価を省略し、戻り値はfalseになる.
     double convergeThre = 5e-3; // 各イテレーションでの変位のノルムがconvergeThre未満の場合に、maxIterationに行っていなくても, minIteraionに行っていなくても、isSatisfiedでなくても、終了する
     int satisfiedConvergeLevel = -1; // convergeThreを満たしても、ikclistのsatisfiedConvergeLevel番目の要素までがisSatisfiedでなければ終了しない.
     size_t pathOutputLoop = 1; // このloop回数に一回、途中経過のpathを出力する. 1以上

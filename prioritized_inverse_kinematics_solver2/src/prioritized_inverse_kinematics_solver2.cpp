@@ -353,6 +353,19 @@ namespace prioritized_inverse_kinematics_solver2 {
         (*it)->calcForwardKinematics(param.calcVelocity);
         (*it)->calcCenterOfMass();
       }
+
+      if(!param.checkFinalState && loop+1 >= param.maxIteration){
+        if(path != nullptr) {
+          path->resize(path->size() + 1);
+          link2Frame(variables, path->back());
+        }
+        if(param.debugLevel > 0) {
+          double time = timer.measure();
+          std::cerr << "[PrioritizedIK] solveIKLoop loop: " << loop << " time: " << time << "[s]." << std::endl;
+        }
+        return false;
+      }
+
       updateConstraints(variables, ikc_list, rejections, param);
 
       if(param.debugLevel>2 && param.viewer) {

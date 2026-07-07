@@ -235,6 +235,76 @@ namespace prioritized_inverse_kinematics_solver2 {
     double q;
   };
 
+  inline cnoid::BodyPtr getSingleBody(const std::vector<cnoid::LinkPtr>& variables, bool& isSingleBody){
+    isSingleBody = true;
+    cnoid::BodyPtr body = nullptr;
+    for(size_t i=0;i<variables.size();i++){
+      if(!variables[i]->body()) continue;
+      if(!body) body = variables[i]->body();
+      else if(body != variables[i]->body()){
+        isSingleBody = false;
+        return nullptr;
+      }
+    }
+    return body;
+  }
+
+  inline void updateVariableVelocities(const std::vector<cnoid::LinkPtr>& variables, const std::vector<InitialJointState>& initialJointStates, double dt){
+    for(size_t i=0;i<variables.size();i++){
+      if(variables[i]->isFreeJoint()) {
+        const cnoid::Isometry3& initialT = initialJointStates[i].T;
+        variables[i]->v() = (variables[i]->p() - initialT.translation()) / dt;
+        cnoid::AngleAxis angleAxis = cnoid::AngleAxis(variables[i]->R() * initialT.linear().transpose());
+        variables[i]->w() = angleAxis.angle()*angleAxis.axis() / dt;
+      }
+      else if(variables[i]->isRevoluteJoint() || variables[i]->isPrismaticJoint()) {
+        variables[i]->dq() = (variables[i]->q() - initialJointStates[i].q) / dt;
+      }
+    }
+  }
+
+  inline bool solveIKLoopOneIterationFast (const std::vector<cnoid::LinkPtr>& variables,
+                                           const std::vector<std::vector<std::shared_ptr<ik_constraint2::IKConstraint> > >& ikc_list,
+                                           std::vector<std::shared_ptr<prioritized_qp_base::Task> >& prevTasks,
+                                           const IKParam& param,
+                                           cnoid::BodyPtr body,
+                                           std::function<void(std::shared_ptr<prioritized_qp_base::Task>&,int)> taskGeneratorFunc) {
+    cnoid::TimeMeasure timer;
+    if(param.debugLevel>0) timer.begin();
+
+    std::vector<InitialJointState> initialJointStates;
+    if(param.calcVelocity){
+      initialJointStates.resize(variables.size());
+      for(size_t i=0;i<variables.size();i++){
+        if(variables[i]->isFreeJoint()) initialJointStates[i] = InitialJointState(variables[i]->T());
+        else if(variables[i]->isRevoluteJoint() || variables[i]->isPrismaticJoint()) initialJointStates[i] = InitialJointState(variables[i]->q());
+        else initialJointStates[i] = InitialJointState();
+      }
+      updateVariableVelocities(variables, initialJointStates, param.dt);
+    }
+
+    if(body){
+      body->calcForwardKinematics(param.calcVelocity);
+      body->calcCenterOfMass();
+    }
+    updateConstraints(variables, ikc_list, std::vector<std::shared_ptr<ik_constraint2::IKConstraint> >(), param);
+
+    solveIKOnce(variables, ikc_list, prevTasks, param, taskGeneratorFunc);
+
+    if(param.calcVelocity) updateVariableVelocities(variables, initialJointStates, param.dt);
+    if(body){
+      body->calcForwardKinematics(param.calcVelocity);
+      body->calcCenterOfMass();
+    }
+
+    if(param.debugLevel > 0) {
+      double time = timer.measure();
+      std::cerr << "[PrioritizedIK] solveIKLoop fast path time: " << time << "[s]." << std::endl;
+    }
+
+    return false;
+  }
+
   inline void link2Frame(const std::vector<cnoid::LinkPtr>& links, std::vector<double>& frame){
     frame.clear();
     for(int l=0;l<links.size();l++){
@@ -289,6 +359,16 @@ namespace prioritized_inverse_kinematics_solver2 {
 
     cnoid::TimeMeasure timer;
     if(param.debugLevel>0) timer.begin();
+
+    bool isSingleBody = true;
+    cnoid::BodyPtr singleBody = getSingleBody(variables, isSingleBody);
+    if(param.maxIteration == 1 &&
+       !param.checkFinalState &&
+       rejections.empty() &&
+       path == nullptr &&
+       isSingleBody){
+      return solveIKLoopOneIterationFast(variables, ikc_list, prevTasks, param, singleBody, taskGeneratorFunc);
+    }
 
     std::set<cnoid::BodyPtr> bodies;
     for(size_t i=0;i<variables.size();i++){

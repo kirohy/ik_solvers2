@@ -31,6 +31,7 @@ add_library(${PROJECT_NAME}
   src/ORConstraint.cpp
   src/ANDConstraint.cpp
   src/PositionConstraint.cpp
+  src/OrientationConstraint.cpp
   src/RegionConstraint.cpp
   src/RegionConstraint2.cpp
   src/COMConstraint.cpp

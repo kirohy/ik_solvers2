@@ -6,12 +6,18 @@
 #include <unordered_map>
 #include <thread>
 #include <mutex>
+#include <chrono>
 #include <cnoid/TimeMeasure>
 
 namespace prioritized_inverse_kinematics_solver2 {
+  inline double secondsSince(const std::chrono::steady_clock::time_point& start){
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  }
+
   inline void updateConstraints(const std::vector<cnoid::LinkPtr>& variables, const std::vector<std::vector<std::shared_ptr<ik_constraint2::IKConstraint> > >& ikc_list, const std::vector<std::shared_ptr<ik_constraint2::IKConstraint> >& rejections, const IKParam& param, bool updateJacobian=true){
     cnoid::TimeMeasure timer;
     if(param.debugLevel>0) timer.begin();
+    const std::chrono::steady_clock::time_point profileStart = std::chrono::steady_clock::now();
 
     if(param.threadsNum<=1){
       for ( int i=0; i<ikc_list.size(); i++ ) {
@@ -59,6 +65,7 @@ namespace prioritized_inverse_kinematics_solver2 {
       double time = timer.measure();
       std::cerr << "[PrioritizedIK] updateConstraints time: " << time << "[s]." << std::endl;
     }
+    if(param.profile) param.profile->constraintUpdateTime += secondsSince(profileStart);
 
   }
 
@@ -94,6 +101,7 @@ namespace prioritized_inverse_kinematics_solver2 {
     cnoid::TimeMeasure timer;
     if(param.debugLevel>0) timer.begin();
 
+    const std::chrono::steady_clock::time_point taskGenerationStart = std::chrono::steady_clock::now();
     double dim = 0;
     for(size_t i=0;i<variables.size();i++) dim+=ik_constraint2::IKConstraint::getJointDOF(variables[i]);
 
@@ -180,15 +188,18 @@ namespace prioritized_inverse_kinematics_solver2 {
 
       if(param.debugLevel>1) prevTasks[i]->name() = std::string("Task") + std::to_string(i);
     }
+    if(param.profile) param.profile->taskGenerationTime += secondsSince(taskGenerationStart);
 
     // solve
     cnoid::VectorX result;
     bool qpSolved = false;
+    const std::chrono::steady_clock::time_point qpSolveStart = std::chrono::steady_clock::now();
     if(param.qpWorkspace){
       qpSolved = prioritized_qp_base::solve(prevTasks, result, *param.qpWorkspace, param.debugLevel);
     }else{
       qpSolved = prioritized_qp_base::solve(prevTasks, result, param.debugLevel);
     }
+    if(param.profile) param.profile->qpSolveTime += secondsSince(qpSolveStart);
     if(!qpSolved){
       std::cerr <<"[PrioritizedIK] prioritized_qp_base::solve failed" << std::endl;
       return true;
@@ -298,10 +309,12 @@ namespace prioritized_inverse_kinematics_solver2 {
     solveIKOnce(variables, ikc_list, prevTasks, param, taskGeneratorFunc);
 
     if(param.calcVelocity) updateVariableVelocities(variables, initialJointStates, param.dt);
+    const std::chrono::steady_clock::time_point postFkStart = std::chrono::steady_clock::now();
     if(body){
       body->calcForwardKinematics(param.calcVelocity);
       body->calcCenterOfMass();
     }
+    if(param.profile) param.profile->postForwardKinematicsTime += secondsSince(postFkStart);
 
     if(param.debugLevel > 0) {
       double time = timer.measure();
@@ -365,6 +378,7 @@ namespace prioritized_inverse_kinematics_solver2 {
 
     cnoid::TimeMeasure timer;
     if(param.debugLevel>0) timer.begin();
+    if(param.profile) param.profile->reset();
 
     bool isSingleBody = true;
     cnoid::BodyPtr singleBody = getSingleBody(variables, isSingleBody);
@@ -436,8 +450,10 @@ namespace prioritized_inverse_kinematics_solver2 {
         }
       }
       for(std::set<cnoid::BodyPtr>::iterator it=bodies.begin(); it != bodies.end(); it++){
+        const std::chrono::steady_clock::time_point postFkStart = std::chrono::steady_clock::now();
         (*it)->calcForwardKinematics(param.calcVelocity);
         (*it)->calcCenterOfMass();
+        if(param.profile) param.profile->postForwardKinematicsTime += secondsSince(postFkStart);
       }
 
       if(!param.checkFinalState && loop+1 >= param.maxIteration){

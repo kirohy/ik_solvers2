@@ -8,6 +8,21 @@
 #include <choreonoid_viewer/choreonoid_viewer.h>
 
 namespace prioritized_inverse_kinematics_solver2 {
+  class IKProfile {
+  public:
+    double constraintUpdateTime = 0.0;
+    double taskGenerationTime = 0.0;
+    double qpSolveTime = 0.0;
+    double postForwardKinematicsTime = 0.0;
+
+    void reset(){
+      this->constraintUpdateTime = 0.0;
+      this->taskGenerationTime = 0.0;
+      this->qpSolveTime = 0.0;
+      this->postForwardKinematicsTime = 0.0;
+    }
+  };
+
   /*
     variables: 動かして良いjoint (free jointは6DOF扱い)
     ikc_list: タスクたち. vectorの前の要素の方が高優先度. 0番目の要素は必ず満たすと仮定しQPを解かない
@@ -44,6 +59,7 @@ namespace prioritized_inverse_kinematics_solver2 {
     bool calcVelocity = true; // dtを用いて速度の計算をするかどうか. 速度を利用するconstraintがあるなら必須. ないなら、falseにすると高速化が見込まれる
     bool checkFinalState = true; // maxIteration番目またはconvergedのloop後に、各constraintを満たしているかどうかの判定を行うかどうか. falseの場合、最終状態のconstraint再評価を省略し、戻り値はfalseになる.
     prioritized_qp_base::SolveWorkspace* qpWorkspace = nullptr; // nullptrで従来どおり. 指定時はprioritized_qp_baseのworkspace付きsolve APIを使う.
+    IKProfile* profile = nullptr; // nullptrで従来どおり. 指定時は粗い計算時間内訳を保存する.
     double convergeThre = 5e-3; // 各イテレーションでの変位のノルムがconvergeThre未満の場合に、maxIterationに行っていなくても, minIteraionに行っていなくても、isSatisfiedでなくても、終了する
     int satisfiedConvergeLevel = -1; // convergeThreを満たしても、ikclistのsatisfiedConvergeLevel番目の要素までがisSatisfiedでなければ終了しない.
     size_t pathOutputLoop = 1; // このloop回数に一回、途中経過のpathを出力する. 1以上

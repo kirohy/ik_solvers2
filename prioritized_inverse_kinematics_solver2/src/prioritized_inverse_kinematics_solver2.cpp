@@ -183,7 +183,13 @@ namespace prioritized_inverse_kinematics_solver2 {
 
     // solve
     cnoid::VectorX result;
-    if(!prioritized_qp_base::solve(prevTasks, result, param.debugLevel)){
+    bool qpSolved = false;
+    if(param.qpWorkspace){
+      qpSolved = prioritized_qp_base::solve(prevTasks, result, *param.qpWorkspace, param.debugLevel);
+    }else{
+      qpSolved = prioritized_qp_base::solve(prevTasks, result, param.debugLevel);
+    }
+    if(!qpSolved){
       std::cerr <<"[PrioritizedIK] prioritized_qp_base::solve failed" << std::endl;
       return true;
     }
